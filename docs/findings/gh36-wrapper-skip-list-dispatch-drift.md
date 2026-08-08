@@ -8,10 +8,10 @@
 
 ## Summary
 
-The wrapper's classifier skip list contained 25 entries whose values are not
+The wrapper's classifier skip list contained 29 entries whose values are not
 package targets. Only four of them (`--hookdir`, `--cachedir`, `--gpgdir`,
 `--logfile`) had been added to the dispatch reject list as part of #30. The
-remaining 21 were being passed through to yay/paru as `"$@"`, where they could
+remaining 25 were being passed through to yay/paru as `"$@"`, where they could
 alter the helper's review step, build/clone context, or the privileged `pacman
 -U` install step without any trust decision.
 
@@ -91,7 +91,6 @@ new rejects under bash and zsh for both helpers.
 - `cargo test --all-targets --no-fail-fast` — all tests pass, including
   `wrapper_dispatch_rejects_review_build_pacman_context_options`.
 - `cargo run --quiet -- selftest` — passes.
-- `bash -n assets/wrapper.sh` and `zsh -n assets/wrapper.sh` — clean.
 
 ## Lesson
 
