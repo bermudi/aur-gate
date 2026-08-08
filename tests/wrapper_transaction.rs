@@ -424,6 +424,69 @@ fn wrapper_dispatch_rejects_pacman_context_dirs() {
     );
 }
 
+fn wrapper_dispatch_rejects_review_build_pacman_context_options() {
+    // Issue #36: the 25 skip-list entries not already in the dispatch reject list.
+    // These options can choose arbitrary executables for the helper's review step,
+    // re-enable review, redirect build/clone context, or modify privileged pacman
+    // install behavior. They (and their --opt=value forms) must be rejected before
+    // any helper runs. The wrapper's own pinned values (--diffmenu=false for yay,
+    // --skipreview/--nosavechanges for paru) remain allowed so shell aliases that
+    // duplicate them are not broken.
+    let fixture = Fixture::new("gatepkg", r#"{"resultcount":0,"results":[]}"#);
+    let cases = [
+        // yay review/editor tools
+        (&["-Syu", "--editor", "/tmp/evil"][..], "yay"),
+        (&["-Syu", "--editor=/tmp/evil"][..], "yay"),
+        (&["-Syu", "--editorflags", "--version"][..], "yay"),
+        (&["-Syu", "--editmenu"][..], "yay"),
+        (&["-Syu", "--editmenu=true"][..], "yay"),
+        (&["-Syu", "--diffmenu"][..], "yay"),
+        (&["-Syu", "--diffmenu=true"][..], "yay"),
+        // paru review/display tools
+        (&["-Syu", "--review"][..], "paru"),
+        (&["-Syu", "--review=true"][..], "paru"),
+        (&["-Syu", "--savechanges"][..], "paru"),
+        (&["-Syu", "--savechanges=true"][..], "paru"),
+        (&["-Syu", "--skipreview=false"][..], "paru"),
+        (&["-Syu", "--nosavechanges=false"][..], "paru"),
+        (&["-Syu", "--bat", "/tmp/evil"][..], "paru"),
+        (&["-Syu", "--batflags", "--version"][..], "paru"),
+        (&["-Syu", "--fm", "/tmp/evil"][..], "paru"),
+        (&["-Syu", "--fmflags", "--version"][..], "paru"),
+        // helper build/clone context
+        (&["-Syu", "--builddir", "/tmp/evil"][..], "yay"),
+        (&["-Syu", "--builddir=/tmp/evil"][..], "yay"),
+        (&["-Syu", "--clonedir", "/tmp/evil"][..], "paru"),
+        (&["-Syu", "--clonedir=/tmp/evil"][..], "paru"),
+        // pacman privileged install behavior
+        (&["-Syu", "--overwrite", "/etc/passwd"][..], "yay"),
+        (&["-Syu", "--overwrite=/etc/passwd"][..], "yay"),
+        (&["-Syu", "--assume-installed", "fake=1"][..], "yay"),
+        (&["-Syu", "--assume-installed=fake=1"][..], "yay"),
+        (&["-Syu", "--ask", "4"][..], "yay"),
+        (&["-Syu", "--ask=4"][..], "yay"),
+        (&["-Syu", "--ignore", "linux"][..], "yay"),
+        (&["-Syu", "--ignore=linux"][..], "yay"),
+        (&["-Syu", "--ignoregroup", "base"][..], "yay"),
+        (&["-Syu", "--ignoregroup=base"][..], "yay"),
+    ];
+    for shell in ["/bin/bash", "/bin/zsh"] {
+        for (args, helper) in cases {
+            let (rc, _out, err) = fixture.run_wrapper_shell(shell, helper, args, &[]);
+            assert_ne!(rc, 0, "{shell} wrapper must reject {args:?} (returned 0)");
+            assert!(
+                err.contains("custom helper/build trust context is unsupported"),
+                "{shell} wrapper reject message missing for {args:?}: {err}"
+            );
+        }
+    }
+    // No helper invocation should have been logged across any case.
+    assert!(
+        fixture.helper_log().is_none(),
+        "helper must not run when dispatch rejects review/build/pacman context options"
+    );
+}
+
 fn wrapper_resourcing_replaces_existing_helper_functions() {
     let fixture = Fixture::new("gatepkg", r#"{"resultcount":0,"results":[]}"#);
     let expected_yay = fixture.bin.join("yay");
@@ -476,6 +539,10 @@ static TESTS: &[(&str, fn())] = &[
     (
         "wrapper_dispatch_rejects_pacman_context_dirs",
         wrapper_dispatch_rejects_pacman_context_dirs,
+    ),
+    (
+        "wrapper_dispatch_rejects_review_build_pacman_context_options",
+        wrapper_dispatch_rejects_review_build_pacman_context_options,
     ),
     (
         "wrapper_resourcing_replaces_existing_helper_functions",

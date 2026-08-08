@@ -64,6 +64,9 @@ mod tests {
             (&["-S", "foo", "--needed", "bar"], "PKG:foo\nPKG:bar\n"),
             (&["-S", "--assume-installed", "fake=1", "foo"], "PKG:foo\n"),
             (&["-S", "--color", "always", "foo"], "PKG:foo\n"),
+            (&["-S", "--color=always", "foo"], "PKG:foo\n"),
+            (&["-S", "--sortby=name", "foo"], "PKG:foo\n"),
+            (&["-S", "--limit", "10", "foo"], "PKG:foo\n"),
             (&["-S", "gate"], "PKG:gate\n"),
             (&["-S", "../bad"], "INVALID_TARGET\n"),
             (&["-Sy"], ""),
@@ -102,6 +105,25 @@ mod tests {
             "--cachedir|--cachedir=*",
             "--gpgdir|--gpgdir=*",
             "--logfile|--logfile=*",
+            "--editor|--editor=*",
+            "--editorflags|--editorflags=*",
+            "--editmenu|--editmenu=*",
+            "--diffmenu|--diffmenu=*",
+            "--bat|--bat=*",
+            "--batflags|--batflags=*",
+            "--fm|--fm=*",
+            "--fmflags|--fmflags=*",
+            "--review|--review=*",
+            "--savechanges|--savechanges=*",
+            "--skipreview=*|",
+            "--nosavechanges=*|",
+            "--builddir|--builddir=*",
+            "--clonedir|--clonedir=*",
+            "--overwrite|--overwrite=*",
+            "--assume-installed|--assume-installed=*",
+            "--ask|--ask=*",
+            "--ignore|--ignore=*",
+            "--ignoregroup|--ignoregroup=*",
             "GIT_CONFIG_COUNT=9",
             "GIT_CONFIG_KEY_0=core.hooksPath",
             "GIT_CONFIG_KEY_4=protocol.allow",
@@ -112,6 +134,25 @@ mod tests {
             assert!(
                 WRAPPER.contains(fragment),
                 "missing wrapper contract: {fragment}"
+            );
+        }
+    }
+
+    #[test]
+    fn wrapper_pins_safe_passthrough_and_pinned_review_options() {
+        // Safe-to-pass-through options must remain in the classifier skip list
+        // (their values are not package targets and are ignored by dispatch).
+        for fragment in [
+            "--answerclean|--answerdiff|--answeredit|--answerupgrade",
+            "--print-format|--color",
+            "--sortby|--searchby",
+            "--requestsplitn",
+            "--completioninterval|--limit|--develsuffixes",
+            "--diffmenu=false|--editmenu=false|--skipreview|--nosavechanges",
+        ] {
+            assert!(
+                WRAPPER.contains(fragment),
+                "missing wrapper safe-passthrough contract: {fragment}"
             );
         }
     }

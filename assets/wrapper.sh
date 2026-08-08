@@ -62,9 +62,9 @@ if command -v aur-gate >/dev/null 2>&1; then
         continue
       fi
       case "$_a" in
-        # Options whose following operand is not a package target. Context-
-        # changing options are rejected by dispatch below; these are safe to
-        # preserve without feeding their values to `aur-gate audit`.
+        # Options whose following operand is not a package target. The dispatch
+        # reject list below makes the trust decision; this list only ensures the
+        # classifier does not feed those operands to `aur-gate audit`.
         --assume-installed|--ignore|--ignoregroup|--overwrite|--ask|\
         --cachedir|--hookdir|--gpgdir|--logfile|--print-format|--color|\
         --answerclean|--answerdiff|--answeredit|--answerupgrade|\
@@ -123,6 +123,36 @@ if command -v aur-gate >/dev/null 2>&1; then
     esac
     for _line in "$@"; do
       case "$_line" in
+        # Exact values already pinned by the wrapper. Duplicates from a user
+        # shell alias are harmless, but any other form of these review flags
+        # would re-enable the helper's editor/viewer step and is rejected below.
+        --diffmenu=false|--editmenu=false|--skipreview|--nosavechanges)
+          ;;
+        # Options that let the caller choose arbitrary executables for the
+        # helper's review step, re-enable review, or redirect build/install
+        # context outside the audited transaction.
+        --editor|--editor=*|\
+        --editorflags|--editorflags=*|\
+        --editmenu|--editmenu=*|\
+        --diffmenu|--diffmenu=*|\
+        --bat|--bat=*|\
+        --batflags|--batflags=*|\
+        --fm|--fm=*|\
+        --fmflags|--fmflags=*|\
+        --review|--review=*|\
+        --savechanges|--savechanges=*|\
+        --skipreview=*|\
+        --nosavechanges=*|\
+        --builddir|--builddir=*|\
+        --clonedir|--clonedir=*|\
+        --overwrite|--overwrite=*|\
+        --assume-installed|--assume-installed=*|\
+        --ask|--ask=*|\
+        --ignore|--ignore=*|\
+        --ignoregroup|--ignoregroup=*)
+          printf 'aur-gate: custom helper/build trust context is unsupported; aborting\n' >&2
+          return 1
+          ;;
         --makepkg|--makepkg=*|--mflags|--mflags=*|\
         --makepkgconf|--makepkgconf=*|\
         --rebuild|--rebuild=*|--rebuildall|--rebuildtree|\

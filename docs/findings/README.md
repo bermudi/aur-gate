@@ -121,7 +121,8 @@ Status: ✓ fixed/closed · △ mitigated · ◷ open. Open findings link to the
 - ✓ **gh8** — Deletion-only PKGBUILD changes classified boring (Cohort 2 H4, #8) → [doc](gh8-deletion-only-changes-classified-boring.md) · [#8](https://github.com/bermudi/aur-gate/issues/8)
 - ✓ **gh27** — Git replace refs split auditor/builder views; grafts rewrite ancestry (Cohort 3 H7) → [doc](gh27-git-replace-refs-grafts.md) · [#27](https://github.com/bermudi/aur-gate/issues/27)
 - ✓ **gh28** — Git `http.*` local config keys escape safety check — proxy/CA MITM (Cohort 3 H8, extends #5) → [doc](gh28-git-http-local-config-mitm.md) · [#28](https://github.com/bermudi/aur-gate/issues/28)
-- ◷ **#30** — Wrapper dispatch does not reject `--hookdir`/`--cachedir`/`--gpgdir`/`--logfile` (Cohort 3 H9) · [#30](https://github.com/bermudi/aur-gate/issues/30)
+- ✓ **gh30** — Wrapper dispatch does not reject `--hookdir`/`--cachedir`/`--gpgdir`/`--logfile` (Cohort 3 H9) → [doc](gh30-wrapper-dispatch-pacman-context-dirs.md) · [#30](https://github.com/bermudi/aur-gate/issues/30)
+- ✓ **gh36** — Wrapper skip-list entries not covered by dispatch reject list (H-followup to #30) → [doc](gh36-wrapper-skip-list-dispatch-drift.md) · [#36](https://github.com/bermudi/aur-gate/issues/36)
 - ✓ **#31** — `cmd_audit` auto-proceeds on first-time install with zero rule hits (Cohort 3 H10, extends #4) → [doc](gh31-cmd-audit-first-contact-zero-hit.md) · [#31](https://github.com/bermudi/aur-gate/issues/31)
 
 ### Medium
