@@ -137,6 +137,12 @@ HTTP flows, explicit and split-package command flows, complete yay/paru wrapper
 transactions, helper/build/install failures, exact-SHA window commits, and fresh
 pacman evidence.
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the verification suite, trust
+invariants, and conventions. To report a security issue, use the private
+advisory flow described in [SECURITY.md](SECURITY.md) — not a public issue.
+
 ## Security status
 
 The durable finding catalog is [`docs/findings/README.md`](docs/findings/README.md).

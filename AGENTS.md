@@ -66,6 +66,9 @@ zsh -n assets/wrapper.sh
 test fixture) cannot mask the `harness = false` integration suites that carry
 the wrapper/transaction proof tests.
 
+CI (`.github/workflows/ci.yml`) mirrors this suite on every push/PR and adds a
+`Cargo.lock` RustSec audit.
+
 For a controlled live missing-cache boundary, use disposable state/caches and
 `check ventoy-bin`; expected result is review (`2`), never clean.
 

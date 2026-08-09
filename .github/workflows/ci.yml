@@ -1,0 +1,60 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The wrapper-transaction suites execute the generated wrapper under
+      # real /bin/bash and /bin/zsh; zsh is not preinstalled on Ubuntu runners.
+      - name: Install zsh
+        run: sudo apt-get update && sudo apt-get install -y zsh
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Format check
+        run: cargo fmt --check
+
+      # --no-fail-fast ensures a lib-unit flake cannot mask the harness=false
+      # integration suites that carry the wrapper/transaction proof tests.
+      - name: Test (all targets)
+        run: cargo test --all-targets --no-fail-fast
+
+      - name: Clippy (deny warnings)
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Embedded selftest
+        run: cargo run --quiet -- selftest
+
+      - name: Wrapper syntax (bash)
+        run: bash -n assets/wrapper.sh
+
+      - name: Wrapper syntax (zsh)
+        run: zsh -n assets/wrapper.sh
+
+  audit:
+    name: dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Audit Cargo.lock against the RustSec advisory database
+        uses: rustsec/audit-check@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
