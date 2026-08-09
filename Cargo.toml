@@ -2,7 +2,7 @@
 name = "aur-gate"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.86"
 description = "Deterministic pre-install gate for Arch Linux AUR updates"
 license = "MIT"
 repository = "https://github.com/bermudi/aur-gate"
