@@ -75,6 +75,9 @@ For a controlled live missing-cache boundary, use disposable state/caches and
 ## Security conventions
 
 - Fail closed at every external boundary; do not swallow exceptions.
+- Fixture git calls must set identity inline (`-c user.name=Test`
+  `-c user.email=test@example.invalid`); CI runners have no global git config
+  and bare `git commit` fails there.
 - Validate package names and external input before path/URL use.
 - No `any`-style type escapes or hidden global test overrides.
 - Do not weaken transport, state, or pacman evidence checks for fixtures.
