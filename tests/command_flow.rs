@@ -616,7 +616,16 @@ fn cached_empty_diff_stages_the_candidate() {
     assert!(Command::new("/usr/bin/git")
         .arg("-C")
         .arg(&src)
-        .args(["commit", "--allow-empty", "-qm", "v2"])
+        .args([
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "commit",
+            "--allow-empty",
+            "-qm",
+            "v2",
+        ])
         .status()
         .unwrap()
         .success());
