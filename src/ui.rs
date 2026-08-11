@@ -23,16 +23,33 @@ pub fn error(text: &str) {
     eprintln!("error: {}", terminal_safe(text));
 }
 
+/// Escape terminal-control bytes and invalid UTF-8 while preserving valid
+/// Unicode (aur-gate's own glyphs like `▶`/`→`/`—`, plus legitimate CJK and
+/// accented evidence text). Only true control characters — C0 (incl. ESC),
+/// DEL, and C1 codes — can drive a terminal, so those are the bytes we escape;
+/// their UTF-8 encoding is rendered as `\xNN` so the sequence cannot execute.
 fn render_safe(bytes: &[u8], preserve_newlines: bool) -> String {
     let mut safe = String::with_capacity(bytes.len());
-    for &byte in bytes {
-        match byte {
-            b' '..=b'~' => safe.push(byte as char),
-            b'\n' if preserve_newlines => safe.push('\n'),
-            b'\n' => safe.push_str("\\n"),
-            b'\r' => safe.push_str("\\r"),
-            b'\t' => safe.push_str("\\t"),
-            _ => safe.push_str(&format!("\\x{byte:02x}")),
+    for chunk in bytes.utf8_chunks() {
+        for c in chunk.valid().chars() {
+            match c {
+                '\n' if preserve_newlines => safe.push('\n'),
+                '\n' => safe.push_str("\\n"),
+                '\r' => safe.push_str("\\r"),
+                '\t' => safe.push_str("\\t"),
+                c if c.is_control() => {
+                    let mut buf = [0u8; 4];
+                    for &b in c.encode_utf8(&mut buf).as_bytes() {
+                        safe.push_str(&format!("\\x{b:02x}"));
+                    }
+                }
+                _ => safe.push(c),
+            }
+        }
+        // Lone/overlong bytes that fail to decode as UTF-8 are not control
+        // codes, but escape them defensively so output stays unambiguous.
+        for &byte in chunk.invalid() {
+            safe.push_str(&format!("\\x{byte:02x}"));
         }
     }
     safe
@@ -103,11 +120,25 @@ mod tests {
     use super::{document_safe, document_safe_bytes, terminal_safe};
 
     #[test]
-    fn terminal_output_escapes_control_and_non_ascii_bytes() {
+    fn terminal_safe_escapes_controls_but_preserves_unicode() {
+        // C0 controls (ESC, CR, LF, tab) and DEL are escaped — this is the
+        // terminal-injection defense.
         assert_eq!(
-            terminal_safe("ok\x1b[2J\r\n\t\u{007f}\u{0080}"),
-            "ok\\x1b[2J\\r\\n\\t\\x7f\\xc2\\x80"
+            terminal_safe("ok\x1b[2J\r\n\t\u{007f}"),
+            "ok\\x1b[2J\\r\\n\\t\\x7f"
         );
+        // C1 8-bit control codes are escaped as their UTF-8 bytes.
+        assert_eq!(terminal_safe("\u{0080}"), "\\xc2\\x80");
+        // Valid Unicode passes through, including aur-gate's own UI glyphs and
+        // legitimate CJK/accented evidence text.
+        assert_eq!(
+            terminal_safe("▶ cursor-bin — proceed"),
+            "▶ cursor-bin — proceed"
+        );
+        assert_eq!(terminal_safe("→ ✓ ✗ ⚠ é 漢"), "→ ✓ ✗ ⚠ é 漢");
+        // Document mode preserves newlines for paging while still escaping ESC;
+        // the byte path also escapes non-UTF-8 bytes (terminal_safe takes &str,
+        // which cannot hold invalid UTF-8 by construction).
         assert_eq!(document_safe("a\n\x1bb"), "a\n\\x1bb");
         assert_eq!(document_safe_bytes(b"a\n\xffb"), "a\n\\xffb");
     }
