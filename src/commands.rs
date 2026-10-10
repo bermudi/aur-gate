@@ -134,7 +134,7 @@ pub fn cmd_gate(app: &mut App) -> i32 {
     let mut rc_overall = 0;
     let mut review_pkgs: Vec<String> = Vec::new();
     for pkg in &pkgs {
-        app.reporter.dim(&format!("▶ {pkg}"));
+        app.reporter.heading(pkg);
         let rc = app.check_pkg(pkg);
         match rc {
             1 => rc_overall = 1,
@@ -220,7 +220,7 @@ pub fn cmd_check(app: &mut App, pkgs: &[String]) -> i32 {
     state::gc_state(&app.paths);
     let mut rc_overall = 0;
     for pkg in pkgs {
-        app.reporter.dim(&format!("▶ {pkg}"));
+        app.reporter.heading(pkg);
         let rc = app.check_pkg(pkg);
         match rc {
             1 => rc_overall = 1,

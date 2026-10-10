@@ -421,6 +421,7 @@ impl<'a> App<'a> {
                             .review_msg(&format!("{pkg} — could not persist staged audit state"));
                         return 1;
                     }
+                    self.review_cta(pkg);
                     2
                 }
                 0 => {
@@ -440,7 +441,10 @@ impl<'a> App<'a> {
                     self.reporter.dim(&format!("ok    {pkg}"));
                     0
                 }
-                _ => 1,
+                _ => {
+                    self.review_cta(pkg);
+                    1
+                }
             }
         })();
 
@@ -451,6 +455,21 @@ impl<'a> App<'a> {
             return 1;
         }
         gate_result
+    }
+
+    /// Per-package "review it" call to action, emitted once at the END of a
+    /// section — never mid-stream between the delta and whole-candidate scans.
+    /// Suppressed unless a flagged diff was actually stashed for this package.
+    fn review_cta(&mut self, pkg: &str) {
+        if !self.paths.flag_diff(pkg).is_file() {
+            return;
+        }
+        self.reporter.dim(&format!(
+            "stashed: {}/flag.{pkg}.diff",
+            self.paths.state_dir.display()
+        ));
+        self.reporter
+            .dim(&format!("  review it → aur-gate explain {pkg}"));
     }
 
     // --- missing-cache two-tier pipeline -----------------------------------
@@ -499,6 +518,7 @@ impl<'a> App<'a> {
                 });
                 if rc == 1 {
                     let _ = fs::remove_dir_all(&temp_root);
+                    self.review_cta(pkg);
                     return 1; // hard-fail: do NOT stage
                 }
                 // rc 0 or 2: retained history is attacker-controlled → replace the
@@ -534,6 +554,7 @@ impl<'a> App<'a> {
                     self.reporter.review_msg(&format!(
                         "{pkg} — hard rule hit(s) in whole candidate; refusing candidate"
                     ));
+                    self.review_cta(pkg);
                     return 1;
                 }
                 if state::stage_scan_if_gating(
@@ -552,6 +573,7 @@ impl<'a> App<'a> {
                 self.reporter.review_msg(&format!(
                     "{pkg} — reconstructed history baseline; whole candidate review required"
                 ));
+                self.review_cta(pkg);
                 return 2;
             }
             self.reporter
@@ -592,6 +614,7 @@ impl<'a> App<'a> {
             self.reporter.review_msg(&format!(
                 "{pkg} — hard rule hit(s) in uncached PKGBUILD; refusing candidate"
             ));
+            self.review_cta(pkg);
             return 1;
         }
         if scan.review_hits {
@@ -603,10 +626,7 @@ impl<'a> App<'a> {
                 "{pkg} — no history baseline; whole candidate review required"
             ));
         }
-        self.reporter.dim(&format!(
-            "scan stashed: {}/flag.{pkg}.diff  (run: aur-gate explain {pkg})",
-            self.paths.state_dir.display()
-        ));
+        self.review_cta(pkg);
         if state::stage_scan_if_gating(&self.paths, self.staging, &pkgbase, &scan_sha, &scan_url)
             .is_err()
         {

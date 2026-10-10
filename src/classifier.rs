@@ -158,6 +158,8 @@ impl Llm for NoLlm {
 
 /// Structured findings sink (replaces the colored stderr logging).
 pub trait Reporter {
+    /// A per-package section heading (bold `▶ pkg`).
+    fn heading(&mut self, pkg: &str);
     /// A hard-fail finding: `BLOCK [tag]` + up to `limit` indented hit lines.
     fn block_hits(&mut self, tag: &str, hits: &[String], limit: usize);
     /// A review finding: `review [tag]` + up to `limit` indented hit lines.
@@ -179,6 +181,9 @@ pub struct CollectingReporter {
     pub needed: Option<(String, String)>,
 }
 impl Reporter for CollectingReporter {
+    fn heading(&mut self, pkg: &str) {
+        self.messages.push(format!("heading: {pkg}"));
+    }
     fn block_hits(&mut self, tag: &str, hits: &[String], limit: usize) {
         self.blocks
             .push((tag.to_string(), hits.iter().take(limit).cloned().collect()));
@@ -554,6 +559,28 @@ fn field_still_present(field: &str, candidate: &str) -> bool {
     candidate.lines().any(|l| re.is_match(l.as_bytes()))
 }
 
+/// A removed line from the interior of a multi-line `sums=(…)` / `source=(…)`
+/// array — a data continuation, not control flow. On a version bump these
+/// arrays rotate atom-by-atom across lines; such removals are boring. We
+/// normalize the parenthesis shape (close an unclosed opener, or strip a stray
+/// closer) and re-run the same data-grammar validators used for added lines, so
+/// only genuine data atoms go inert — `return`, guards, and function syntax do
+/// not match and still require review.
+fn removed_array_member_is_inert(line: &str) -> bool {
+    let t = line.trim();
+    if t.is_empty() {
+        return false;
+    }
+    let inner = t.strip_suffix(')').unwrap_or(t);
+    let closed = format!("{t})");
+    let wrap_sums = format!("sha256sums=({inner})");
+    let wrap_src = format!("source=({inner})");
+    pkgbuild::checksum_literal_line(&closed)
+        || pkgbuild::checksum_literal_line(&wrap_sums)
+        || pkgbuild::safe_array_literal_line(&closed, pkgbuild::LiteralKind::Source)
+        || pkgbuild::safe_array_literal_line(&wrap_src, pkgbuild::LiteralKind::Source)
+}
+
 /// Returns the review tag if a removed PKGBUILD line deletes a security-
 /// relevant field that is no longer present in the candidate, else None.
 fn removed_line_is_inert_metadata(line: &str) -> bool {
@@ -562,6 +589,9 @@ fn removed_line_is_inert_metadata(line: &str) -> bool {
     }
     let member = line.trim();
     if member.is_empty() {
+        return true;
+    }
+    if removed_array_member_is_inert(line) {
         return true;
     }
     pkgbuild::safe_array_literal_line(&format!("source=({member})"), pkgbuild::LiteralKind::Source)
@@ -1099,12 +1129,7 @@ pub fn scan_diff_rules(ctx: &mut Ctx, pkg: &str, dir: &Path, base_ref: &str) -> 
 
     match class.class {
         DiffClass::Hard => {
-            if state::stash_flag(ctx.paths, pkg, dir, base_ref, &candidate_ref, "hard").is_ok() {
-                ctx.reporter.dim(&format!(
-                    "diff stashed: {}/flag.{pkg}.diff",
-                    ctx.paths.state_dir.display()
-                ));
-            } else {
+            if state::stash_flag(ctx.paths, pkg, dir, base_ref, &candidate_ref, "hard").is_err() {
                 ctx.reporter
                     .review_msg("could not persist the blocked diff");
             }
@@ -1119,10 +1144,6 @@ pub fn scan_diff_rules(ctx: &mut Ctx, pkg: &str, dir: &Path, base_ref: &str) -> 
                 ctx.reporter.review_msg("could not persist the review diff");
                 return 1;
             }
-            ctx.reporter.dim(&format!(
-                "diff stashed: {}/flag.{pkg}.diff  (run: aur-gate explain {pkg})",
-                ctx.paths.state_dir.display()
-            ));
             2
         }
         DiffClass::BoringEdge => {
@@ -1142,10 +1163,6 @@ pub fn scan_diff_rules(ctx: &mut Ctx, pkg: &str, dir: &Path, base_ref: &str) -> 
                     ctx.reporter.review_msg("could not persist the review diff");
                     return 1;
                 }
-                ctx.reporter.dim(&format!(
-                    "diff stashed: {}/flag.{pkg}.diff  (run: aur-gate explain {pkg})",
-                    ctx.paths.state_dir.display()
-                ));
                 return 2;
             }
             let maxlines = ctx.explain_maxlines;
@@ -1186,10 +1203,6 @@ pub fn scan_diff_rules(ctx: &mut Ctx, pkg: &str, dir: &Path, base_ref: &str) -> 
                         ctx.reporter.review_msg("could not persist the review diff");
                         return 1;
                     }
-                    ctx.reporter.dim(&format!(
-                        "diff stashed: {}/flag.{pkg}.diff  (run: aur-gate explain {pkg})",
-                        ctx.paths.state_dir.display()
-                    ));
                     2
                 }
             }
@@ -1495,6 +1508,57 @@ mod tests {
             ),
             DiffClass::BoringEdge
         );
+    }
+
+    const MLSUMS_OLD_PKG: &[u8] = b"pkgname=fixture\npkgver=1\npkgrel=1\nsource=('https://example.com/fixture-1.tar')\nsha256sums=('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'\n          'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')\n";
+    const MLSUMS_NEW_PKG: &[u8] = b"pkgname=fixture\npkgver=2\npkgrel=1\nsource=('https://example.com/fixture-2.tar')\nsha256sums=('cccccccccccccccccccccccccccccccc'\n          'dddddddddddddddddddddddddddddddd')\n";
+    const MLSUMS_OLD_SRC: &[u8] = b"pkgbase = fixture\n\tpkgver = 1\n\tpkgrel = 1\n\tsource = https://example.com/fixture-1.tar\n\tsha256sums = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n\tsha256sums = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\npkgname = fixture\n";
+    const MLSUMS_NEW_SRC: &[u8] = b"pkgbase = fixture\n\tpkgver = 2\n\tpkgrel = 1\n\tsource = https://example.com/fixture-2.tar\n\tsha256sums = cccccccccccccccccccccccccccccccc\n\tsha256sums = dddddddddddddddddddddddddddddddd\npkgname = fixture\n";
+
+    #[test]
+    fn pipeline_multiline_sums_rotation_does_not_escalate() {
+        // sha256sums formatted as a multi-line array (opener line carrying an
+        // atom, then a bare closer with a trailing ')'). Rotating it on a version
+        // bump must NOT fire pkgbuild-non-boring-removal — i.e. must stay boring
+        // or boring-edge, never escalate to Review.
+        let class = classify_fixture(
+            MLSUMS_OLD_PKG,
+            MLSUMS_NEW_PKG,
+            MLSUMS_OLD_SRC,
+            MLSUMS_NEW_SRC,
+            &[],
+        );
+        assert!(
+            matches!(class, DiffClass::Boring | DiffClass::BoringEdge),
+            "multi-line sums rotation escalated to {class:?}"
+        );
+    }
+
+    #[test]
+    fn removed_multiline_array_members_are_inert() {
+        use super::removed_line_is_inert_metadata as inert;
+        // multi-line sha256sums: opener with an atom but no close, and a bare
+        // closer member with a trailing ')' (the opera-developer shape).
+        assert!(inert(
+            "sha256sums=('b059a4241852cf013297c559881be9af2334f1651406641dd8d93e641872d690'"
+        ));
+        assert!(inert(
+            "            '521e3e9c59fba536c5316cc3a9eb5ab6ac2f3cdce1051fda1a7446a4c3147bcd')"
+        ));
+        // bare quoted source-url continuation member
+        assert!(inert("  'https://example.com/fixture-1.tar'"));
+        // single-line complete literal stays inert
+        assert!(inert("sha256sums=('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')"));
+    }
+
+    #[test]
+    fn removed_control_flow_is_not_inert() {
+        use super::removed_line_is_inert_metadata as inert;
+        // deletion-based control-flow activation must still require review.
+        assert!(!inert("  return 0"));
+        assert!(!inert("}"));
+        assert!(!inert("if [ -z \"$x\" ]; then"));
+        assert!(!inert("  rm -rf /"));
     }
 
     struct ReplyLlm {
